@@ -1,0 +1,2232 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Akıllı Şehir Navigasyonu</title>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
+<style>
+  /* ═══ Tasarım sistemi ═══════════════════════════════════════════ */
+  :root {
+    --lacivert:    #1A4F8A;
+    --kirmizi:     #E30613;
+    --bg:          #F5F7FA;
+    --beyaz:       #FFFFFF;
+    --koyu:        #1F2937;
+    --soluk:       #6B7280;
+    --kenar:       #E5E7EB;
+    --yesil:       #16A34A;
+    --turuncu:     #F59E0B;
+    --shadow-sm:   0 1px 3px rgba(0,0,0,0.06);
+    --shadow-md:   0 4px 12px rgba(0,0,0,0.10);
+    --r:           12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 Roboto, "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--koyu);
+    line-height: 1.5;
+    overflow: hidden;
+  }
+
+  /* ═══ Header ════════════════════════════════════════════════════ */
+  header {
+    background: var(--lacivert);
+    color: var(--beyaz);
+    padding: 14px 24px;
+    box-shadow: var(--shadow-md);
+    z-index: 1000;
+    position: relative;
+  }
+  .h-baslik    { font-size: 19px; font-weight: 700; display: flex; gap: 10px; align-items: center; }
+  .h-altbaslik { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+  /* ═══ Ana yerleşim ══════════════════════════════════════════════ */
+  .konteyner {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    height: calc(100vh - 60px);
+  }
+
+  /* ═══ Sol panel ═════════════════════════════════════════════════ */
+  .panel {
+    background: var(--beyaz);
+    overflow-y: auto;
+    padding: 18px;
+    box-shadow: var(--shadow-md);
+    z-index: 500;
+    position: relative;
+  }
+  .panel::-webkit-scrollbar { width: 6px; }
+  .panel::-webkit-scrollbar-thumb { background: var(--kenar); border-radius: 3px; }
+
+  .kart {
+    background: var(--beyaz);
+    border: 1px solid var(--kenar);
+    border-radius: var(--r);
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 14px;
+  }
+
+  /* — Form alanları — */
+  .input-grup { position: relative; margin-bottom: 10px; }
+  .input-grup .ikon {
+    position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); font-size: 14px;
+    pointer-events: none;
+  }
+  .input-grup input {
+    width: 100%; padding: 12px 12px 12px 38px;
+    border: 1.5px solid var(--kenar);
+    border-radius: 10px;
+    font-size: 14px; font-family: inherit;
+    background: var(--bg); color: var(--koyu);
+    transition: all 0.15s;
+  }
+  .input-grup input:focus {
+    outline: none; background: var(--beyaz);
+    border-color: var(--lacivert);
+    box-shadow: 0 0 0 3px rgba(26, 79, 138, 0.12);
+  }
+
+  .secim-blok {
+    margin: 8px 0 12px; padding: 10px;
+    background: #F8F6F1; border: 1px solid var(--kenar);
+    border-radius: 10px;
+  }
+  .secim-baslik {
+    font-size: 11px; font-weight: 700; color: var(--soluk);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  .secim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .secim-label { display: block; font-size: 11px; color: var(--soluk); margin-bottom: 4px; }
+  .secim-select {
+    width: 100%; padding: 8px 10px;
+    border: 1.5px solid var(--kenar); border-radius: 8px;
+    background: var(--bg); font-size: 12.5px; font-family: inherit;
+  }
+  .secim-select:disabled { opacity: 0.6; }
+  .secim-tur-badge {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 10px; font-size: 10px; font-weight: 700;
+    background: var(--lacivert); color: #fff; margin-left: 5px;
+  }
+
+  .secim-onay {
+    margin-top: 8px;
+    padding: 7px 10px;
+    background: #DCFCE7;
+    border: 1px solid #86EFAC;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #15803D;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .secim-onay::before { content: "✓"; font-size: 14px; }
+
+  /* — Strateji butonları — */
+  .strateji-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px; margin: 10px 0;
+  }
+  .strateji-btn {
+    padding: 9px 4px;
+    border: 1.5px solid var(--kenar);
+    border-radius: 10px;
+    background: var(--beyaz);
+    color: var(--koyu);
+    font-size: 11px; font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1.3;
+  }
+  .strateji-btn:hover { border-color: var(--lacivert); }
+  .strateji-btn.aktif {
+    background: var(--kirmizi);
+    border-color: var(--kirmizi);
+    color: var(--beyaz);
+    box-shadow: 0 2px 8px rgba(227, 6, 19, 0.30);
+  }
+
+  /* — Rota Bul butonu — */
+  .ara-btn {
+    width: 100%; padding: 13px;
+    background: var(--kirmizi); color: var(--beyaz);
+    border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .ara-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(227, 6, 19, 0.30);
+  }
+  .ara-btn:disabled {
+    opacity: 0.6; cursor: not-allowed; transform: none;
+  }
+
+  /* — Hata bandı — */
+  .hata {
+    background: #FEE2E2; color: #991B1B;
+    padding: 11px 14px;
+    border-radius: 10px;
+    border-left: 4px solid var(--kirmizi);
+    margin-top: 10px;
+    font-size: 13px;
+  }
+
+  /* — Spinner — */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: var(--beyaz);
+    border-radius: 50%;
+    animation: don 0.8s linear infinite;
+  }
+  @keyframes don { to { transform: rotate(360deg); } }
+
+  /* ═══ Sonuç kartı ═══════════════════════════════════════════════ */
+  .ozet-baslik {
+    font-size: 11px; font-weight: 700;
+    color: var(--lacivert);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+  }
+  .istatistikler {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px; margin-bottom: 14px;
+  }
+  .istatistik-kutu {
+    text-align: center;
+    padding: 10px 4px;
+    background: var(--bg);
+    border-radius: 10px;
+  }
+  .istatistik-kutu .deger {
+    font-size: 22px; font-weight: 700;
+    color: var(--lacivert); line-height: 1;
+  }
+  .istatistik-kutu .etiket {
+    font-size: 10px; color: var(--soluk);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    margin-top: 4px; font-weight: 600;
+  }
+
+  /* — Hat zinciri — */
+  .hat-zinciri {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 4px;
+    padding-top: 14px;
+    border-top: 1px solid var(--kenar);
+  }
+  .hat-rozet {
+    padding: 4px 10px;
+    border-radius: 14px;
+    background: var(--soluk);
+    color: var(--beyaz);
+    font-size: 11px; font-weight: 700;
+    box-shadow: var(--shadow-sm);
+  }
+  .hat-ok { color: var(--soluk); font-size: 11px; }
+
+  /* ═══ Adımlar ══════════════════════════════════════════════════ */
+  .adimlar-baslik {
+    font-size: 11px; font-weight: 700;
+    color: var(--soluk);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 16px 0 8px 4px;
+  }
+  .adimlar {
+    background: var(--beyaz);
+    border: 1px solid var(--kenar);
+    border-radius: var(--r);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .adim {
+    display: flex; gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--kenar);
+    position: relative;
+    align-items: flex-start;
+  }
+  .adim:last-child { border-bottom: none; }
+  .adim::before {
+    content: ""; position: absolute;
+    left: 30px; top: 48px; bottom: -2px;
+    width: 2px; background: var(--kenar);
+    z-index: 1;
+  }
+  .adim:last-child::before { display: none; }
+
+  .adim-ikon {
+    flex-shrink: 0;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    background: var(--bg);
+    border: 2px solid var(--kenar);
+    z-index: 2;
+    color: var(--beyaz);
+  }
+  .adim.bas       .adim-ikon { background: var(--yesil);   border-color: var(--yesil);   }
+  .adim.son       .adim-ikon { background: var(--kirmizi); border-color: var(--kirmizi); }
+  .adim.aktarma   .adim-ikon { background: var(--turuncu); border-color: var(--turuncu); }
+  .adim.ara       .adim-ikon { background: var(--beyaz); color: var(--soluk); border-color: var(--kenar); font-size: 11px; font-weight: 700; }
+
+  .adim-icerik {
+    flex: 1; min-width: 0; padding-top: 4px;
+  }
+  .adim-baslik {
+    font-size: 14px; font-weight: 600; color: var(--koyu);
+    line-height: 1.3;
+  }
+  .adim-aciklama {
+    font-size: 12px; color: var(--soluk);
+    margin-top: 3px;
+    display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  }
+  .adim-rozet {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--soluk);
+    color: var(--beyaz);
+    font-size: 11px; font-weight: 700;
+  }
+  .adim.ara .adim-baslik { font-size: 12px; color: var(--soluk); font-weight: 500; }
+
+  /* ═══ Harita ═══════════════════════════════════════════════════ */
+  #harita { width: 100%; height: 100%; background: var(--bg); }
+
+  .leaflet-popup-content-wrapper { border-radius: 10px; }
+  .leaflet-popup-content { font-size: 13px; margin: 10px 14px; }
+
+  /* Özel marker'lar */
+  .marker-ozel {
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    border: 3px solid var(--beyaz);
+    color: var(--beyaz);
+    font-weight: 700; font-size: 13px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.30);
+  }
+  .marker-bas     { background: var(--yesil);   width: 30px; height: 30px; }
+  .marker-son     { background: var(--kirmizi); width: 30px; height: 30px; }
+  .marker-aktarma { background: var(--turuncu); width: 24px; height: 24px; font-size: 12px; }
+
+  /* Boş durum mesajı */
+  .bos-durum {
+    color: var(--soluk);
+    text-align: center;
+    padding: 22px 16px;
+    font-size: 13px;
+  }
+
+  /* Mobil */
+  @media (max-width: 900px) {
+    .konteyner { grid-template-columns: 1fr; grid-template-rows: 50vh 1fr; }
+    .panel { order: 2; }
+    #harita-konteyner { order: 1; }
+  }
+
+  /* ═══ Hat Profil Bileşeni ═══════════════════════════════════════ */  /* YENİ */
+  .hp-kart {  /* YENİ */
+    background: var(--beyaz);  /* YENİ */
+    border: 1px solid var(--kenar);  /* YENİ */
+    border-radius: var(--r);  /* YENİ */
+    padding: 16px;  /* YENİ */
+    box-shadow: var(--shadow-sm);  /* YENİ */
+    margin-bottom: 14px;  /* YENİ */
+  }  /* YENİ */
+  .hp-baslik {  /* YENİ */
+    font-size: 11px; font-weight: 700;  /* YENİ */
+    color: var(--lacivert);  /* YENİ */
+    text-transform: uppercase;  /* YENİ */
+    letter-spacing: 0.05em;  /* YENİ */
+    margin-bottom: 10px;  /* YENİ */
+    display: flex; align-items: center; gap: 6px;  /* YENİ */
+  }  /* YENİ */
+  .hp-kontrol {  /* YENİ */
+    display: flex; gap: 8px; margin-bottom: 12px; align-items: center;  /* YENİ */
+  }  /* YENİ */
+  .hp-kontrol select {  /* YENİ */
+    flex: 1; padding: 9px 10px;  /* YENİ */
+    border: 1.5px solid var(--kenar);  /* YENİ */
+    border-radius: 10px; font-size: 13px;  /* YENİ */
+    font-family: inherit; background: var(--bg);  /* YENİ */
+    color: var(--koyu); cursor: pointer;  /* YENİ */
+  }  /* YENİ */
+  .hp-kontrol select:focus {  /* YENİ */
+    outline: none; border-color: var(--lacivert);  /* YENİ */
+    box-shadow: 0 0 0 3px rgba(26,79,138,0.12);  /* YENİ */
+  }  /* YENİ */
+  .hp-yon-btn {  /* YENİ */
+    padding: 9px 14px; border: 1.5px solid var(--kenar);  /* YENİ */
+    border-radius: 10px; background: var(--beyaz);  /* YENİ */
+    font-size: 12px; font-weight: 600; cursor: pointer;  /* YENİ */
+    font-family: inherit; color: var(--koyu);  /* YENİ */
+    transition: all 0.15s; white-space: nowrap;  /* YENİ */
+  }  /* YENİ */
+  .hp-yon-btn.aktif {  /* YENİ */
+    background: var(--lacivert); color: var(--beyaz);  /* YENİ */
+    border-color: var(--lacivert);  /* YENİ */
+  }  /* YENİ */
+  .hp-istatistik {  /* YENİ */
+    display: flex; gap: 12px; margin-bottom: 12px;  /* YENİ */
+    font-size: 12px; color: var(--soluk);  /* YENİ */
+  }  /* YENİ */
+  .hp-istatistik strong {  /* YENİ */
+    color: var(--lacivert); font-size: 14px;  /* YENİ */
+  }  /* YENİ */
+  .hp-chart-wrap {  /* YENİ */
+    position: relative; height: 200px;  /* YENİ */
+    margin-bottom: 12px;  /* YENİ */
+  }  /* YENİ */
+  .hp-durak-liste {  /* YENİ */
+    max-height: 220px; overflow-y: auto;  /* YENİ */
+    border: 1px solid var(--kenar);  /* YENİ */
+    border-radius: 10px;  /* YENİ */
+  }  /* YENİ */
+  .hp-durak-liste::-webkit-scrollbar { width: 5px; }  /* YENİ */
+  .hp-durak-liste::-webkit-scrollbar-thumb { background: var(--kenar); border-radius: 3px; }  /* YENİ */
+  .hp-durak-satir {  /* YENİ */
+    display: flex; align-items: center; gap: 8px;  /* YENİ */
+    padding: 7px 12px; border-bottom: 1px solid var(--kenar);  /* YENİ */
+    cursor: pointer; font-size: 12px;  /* YENİ */
+    transition: background 0.1s;  /* YENİ */
+  }  /* YENİ */
+  .hp-durak-satir:last-child { border-bottom: none; }  /* YENİ */
+  .hp-durak-satir:hover { background: var(--bg); }  /* YENİ */
+  .hp-durak-satir.hp-aktif { background: #EFF6FF; }  /* YENİ */
+  .hp-durak-no {  /* YENİ */
+    flex-shrink: 0; width: 26px; height: 26px;  /* YENİ */
+    border-radius: 50%; background: var(--bg);  /* YENİ */
+    display: flex; align-items: center; justify-content: center;  /* YENİ */
+    font-size: 10px; font-weight: 700; color: var(--soluk);  /* YENİ */
+    border: 1.5px solid var(--kenar);  /* YENİ */
+  }  /* YENİ */
+  .hp-durak-satir:first-child .hp-durak-no {  /* YENİ */
+    background: var(--yesil); color: var(--beyaz); border-color: var(--yesil);  /* YENİ */
+  }  /* YENİ */
+  .hp-durak-satir:last-child .hp-durak-no {  /* YENİ */
+    background: var(--kirmizi); color: var(--beyaz); border-color: var(--kirmizi);  /* YENİ */
+  }  /* YENİ */
+  .hp-durak-ad { flex: 1; font-weight: 500; color: var(--koyu); }  /* YENİ */
+  .hp-durak-km { font-size: 11px; color: var(--soluk); white-space: nowrap; }  /* YENİ */
+
+/* ===== GRAF MODELİ PANELİ — eklendi ===== */
+/* ================================================================
+   GRAF MODELİ PANELİ — VANILLA CSS
+   templates/index.html içindeki <style> bloğuna olduğu gibi ekleyin.
+   Sınıf isimleri "gp-" ön ekiyle başlar; mevcut CSS'inize çakışmaz.
+   ================================================================ */
+
+:root{
+  --gp-bg: #FFFFFF;
+  --gp-ink: #14171A;
+  --gp-ink-2: #3A3F45;
+  --gp-muted: #6B7177;
+  --gp-line: #E6E2D8;
+  --gp-line-2: #EFEBE0;
+  --gp-navy: #1A4F8A;
+  --gp-navy-soft: #E8EEF6;
+  --gp-amber: #C8772A;
+  --gp-amber-soft: #F6EADB;
+  --gp-teal: #2A7F6E;
+  --gp-red: #B5443A;
+}
+
+/* trigger button — istediğiniz yere yerleştirebilirsiniz */
+.gp-trigger{
+  display:inline-flex; align-items:center; gap:10px;
+  background:#fff; border:1px solid var(--gp-line);
+  padding:10px 14px; border-radius:9px; cursor:pointer;
+  font-family:"Instrument Sans", system-ui, sans-serif;
+  font-size:13px; color:var(--gp-ink-2); position:relative;
+  box-shadow:0 6px 22px -16px rgba(20,23,26,0.18);
+}
+.gp-trigger:hover{ border-color:var(--gp-navy); color:var(--gp-navy);}
+.gp-trigger .gp-ic{
+  width:22px;height:22px;border-radius:6px; background:var(--gp-navy);
+  color:#fff; display:grid;place-items:center;
+  font-family:"JetBrains Mono",monospace; font-weight:700; font-size:11px;
+}
+.gp-trigger b{ color:var(--gp-ink); font-weight:600;}
+.gp-trigger .gp-arr{ color:var(--gp-muted); font-family:"JetBrains Mono",monospace; font-size:11px; margin-left:6px;}
+
+.gp-scrim{
+  position:fixed; inset:0; background:rgba(20,23,26,0.20);
+  opacity:0; pointer-events:none; transition:opacity 280ms ease;
+  z-index:9990; backdrop-filter: blur(1px);
+}
+.gp-scrim.gp-open{ opacity:1; pointer-events:auto;}
+
+.gp-panel{
+  position:fixed; top:0; right:0; height:100vh; width:480px; max-width:96vw;
+  background:var(--gp-bg); border-left:1px solid var(--gp-line);
+  box-shadow:-24px 0 60px -20px rgba(20,23,26,0.22);
+  z-index:9999; transform:translateX(100%);
+  transition:transform 360ms cubic-bezier(.2,.7,.1,1);
+  display:flex; flex-direction:column;
+  font-family:"Instrument Sans", system-ui, sans-serif;
+  font-size:15px; color:var(--gp-ink); line-height:1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.gp-panel.gp-open{ transform:translateX(0);}
+
+.gp-head{
+  padding:18px 22px 14px; border-bottom:1px solid var(--gp-line-2);
+  display:flex; align-items:flex-start; gap:12px;
+}
+.gp-head .gp-badge{
+  width:32px;height:32px;border-radius:8px; background:var(--gp-navy);
+  color:#fff; display:grid;place-items:center; flex-shrink:0;
+  font-family:"JetBrains Mono",monospace; font-weight:700; font-size:11px;
+}
+.gp-head h2{ margin:0; font-size:17px; font-weight:600; letter-spacing:-0.015em;}
+.gp-head .gp-kicker{
+  font-size:10.5px; text-transform:uppercase; color:var(--gp-muted);
+  letter-spacing:0.1em; margin-bottom:3px; font-weight:500;
+}
+.gp-close{
+  margin-left:auto; width:30px;height:30px; border-radius:7px;
+  border:1px solid var(--gp-line); background:#fff; cursor:pointer;
+  display:grid;place-items:center; font-size:14px; color:var(--gp-ink-2);
+  font-family:inherit;
+}
+.gp-close:hover{ background:var(--gp-line-2);}
+
+.gp-tabs{ display:flex; padding:4px 22px 0; border-bottom:1px solid var(--gp-line-2);}
+.gp-tabs button{
+  background:transparent; border:0; padding:10px 0; margin-right:18px;
+  font-size:12.5px; font-family:inherit; font-weight:500; color:var(--gp-muted);
+  cursor:pointer; position:relative;
+}
+.gp-tabs button.gp-active{ color:var(--gp-ink);}
+.gp-tabs button.gp-active::after{
+  content:""; position:absolute; left:0; right:0; bottom:-1px; height:2px;
+  background:var(--gp-ink); border-radius:2px 2px 0 0;
+}
+
+.gp-body{ flex:1; overflow:auto; padding:20px 22px 28px;}
+.gp-body section + section{ margin-top:22px;}
+.gp-body.gp-hidden{ display:none;}
+
+.gp-intro{
+  font-family:"Instrument Serif", Georgia, serif; font-size:18px; line-height:1.4;
+  color:var(--gp-ink-2); letter-spacing:-0.005em;
+  border-left:2px solid var(--gp-navy); padding:2px 0 2px 14px; margin:0;
+}
+.gp-intro em{ color:var(--gp-ink); font-style: italic;}
+
+.gp-hsec{
+  font-size:10.5px; text-transform:uppercase; letter-spacing:0.1em;
+  color:var(--gp-muted); font-weight:600; margin:0 0 10px;
+  display:flex; align-items:center; gap:10px; white-space:nowrap;
+}
+.gp-hsec::after{ content:""; flex:1; height:1px; background:var(--gp-line-2);}
+
+.gp-concept{
+  border:1px solid var(--gp-line); border-radius:11px;
+  padding:14px 16px; background:#fff; margin-bottom:10px;
+  display:grid; grid-template-columns:44px 1fr; gap:14px; align-items:start;
+}
+.gp-concept .gp-glyph{
+  width:44px;height:44px;border-radius:10px;
+  display:grid; place-items:center; background:var(--gp-line-2);
+}
+.gp-concept .gp-name{
+  display:flex; align-items:baseline; gap:8px; margin-bottom:3px;
+  flex-wrap:wrap;
+}
+.gp-concept .gp-name b{ font-size:14.5px; font-weight:600; letter-spacing:-0.01em;}
+.gp-concept .gp-name code{
+  font-family:"JetBrains Mono",monospace; font-size:11px;
+  color:var(--gp-muted); background:var(--gp-line-2);
+  padding:1px 6px; border-radius:4px;
+}
+.gp-concept .gp-desc{ font-size:13px; color:var(--gp-ink-2); line-height:1.5;}
+.gp-concept .gp-ex{
+  margin-top:8px; font-family:"JetBrains Mono",monospace;
+  font-size:11px; color:var(--gp-muted);
+}
+
+.gp-viz{
+  border:1px solid var(--gp-line); border-radius:12px;
+  background:linear-gradient(180deg,#FBFAF6,#fff 70%); padding:14px 14px 12px;
+}
+.gp-viz svg{ display:block; width:100%; height:auto;}
+.gp-viz .gp-cap{
+  font-size:11px; color:var(--gp-muted); margin-top:8px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.gp-viz .gp-cap .gp-lab{ font-family:"JetBrains Mono",monospace;}
+.gp-vctl{
+  display:flex; gap:4px; margin-top:10px;
+  background:var(--gp-line-2); padding:3px; border-radius:8px;
+}
+.gp-vctl button{
+  flex:1; background:transparent; border:0; font-family:inherit;
+  font-size:11.5px; padding:6px; border-radius:5px; cursor:pointer;
+  color:var(--gp-ink-2); font-weight:500;
+}
+.gp-vctl button.gp-active{ background:#fff; color:var(--gp-ink); box-shadow:0 1px 2px rgba(0,0,0,0.06);}
+
+.gp-formula{
+  border:1px solid var(--gp-line); border-radius:10px; background:#FBFAF6;
+  padding:12px 14px; margin-bottom:8px;
+  display:grid; grid-template-columns:90px 1fr; gap:14px; align-items:center;
+}
+.gp-formula .gp-flab{
+  font-size:11px; text-transform:uppercase; letter-spacing:0.08em;
+  color:var(--gp-muted); font-weight:600;
+}
+.gp-formula .gp-flab b{ display:block; color:var(--gp-ink); font-size:13px; text-transform:none; letter-spacing:-0.01em; margin-bottom:2px;}
+.gp-formula .gp-eq{
+  font-family:"JetBrains Mono",monospace; font-size:12px;
+  color:var(--gp-ink); line-height:1.6;
+}
+.gp-formula .gp-eq .gp-num{ color:var(--gp-amber); font-weight:600;}
+.gp-formula .gp-eq .gp-key{ color:var(--gp-navy); font-weight:600;}
+
+.gp-steps{ border:1px solid var(--gp-line); border-radius:10px; overflow:hidden;}
+.gp-step{
+  display:grid; grid-template-columns:74px 1fr;
+  padding:10px 12px; gap:10px; align-items:flex-start;
+  border-top:1px solid var(--gp-line-2); font-size:13px;
+}
+.gp-step:first-child{ border-top:0;}
+.gp-step .gp-tag{
+  font-family:"JetBrains Mono",monospace; font-size:10.5px;
+  padding:2px 7px; border-radius:4px; font-weight:600;
+  width:fit-content; letter-spacing:0.02em;
+}
+.gp-tag.gp-bin{ background:#E1EFEB; color:var(--gp-teal);}
+.gp-tag.gp-devam{ background:var(--gp-line-2); color:var(--gp-ink-2);}
+.gp-tag.gp-aktarma{ background:var(--gp-amber-soft); color:var(--gp-amber);}
+.gp-tag.gp-in{ background:#F5DDD9; color:var(--gp-red);}
+.gp-tag.gp-yurume{ background:var(--gp-line-2); color:var(--gp-ink-2);}
+.gp-step .gp-mean{ color:var(--gp-ink-2); line-height:1.5;}
+.gp-step .gp-mean code{
+  font-family:"JetBrains Mono",monospace; font-size:11.5px; color:var(--gp-ink);
+  background:var(--gp-line-2); padding:1px 5px; border-radius:3px;
+}
+
+.gp-foot{
+  border-top:1px solid var(--gp-line-2); padding:12px 22px;
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:11.5px; color:var(--gp-muted);
+}
+.gp-foot .gp-v{ font-family:"JetBrains Mono",monospace;}
+
+.gp-paragraph{
+  margin:0; font-size:13.5px; color:var(--gp-ink-2); line-height:1.55;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-baslik">🚇 Akıllı Şehir Navigasyonu</div>
+  <div class="h-altbaslik">İstanbul Toplu Taşıma Rota Planlayıcı</div>
+</header>
+
+<div class="konteyner">
+
+  <!-- ═══ Sol panel ═══════════════════════════════════════════ -->
+  <aside class="panel">
+    <div class="kart">
+      <div class="input-grup">
+        <span class="ikon">🟢</span>
+        <input type="text" id="baslangic" list="duraklar"
+               placeholder="Nereden? (örn. Taksim)" autocomplete="off">
+      </div>
+      <div class="secim-blok" id="baslangic-secim">
+        <div class="secim-baslik">① Başlangıç durağını seçin</div>
+        <div class="secim-grid">
+          <div>
+            <label class="secim-label" for="baslangic-ilce">İlçe</label>
+            <select id="baslangic-ilce" class="secim-select" disabled>
+              <option value="">— İlçe seçin —</option>
+            </select>
+          </div>
+          <div>
+            <label class="secim-label" for="baslangic-durak">Durak</label>
+            <select id="baslangic-durak" class="secim-select" disabled>
+              <option value="">— Durak seçin —</option>
+            </select>
+          </div>
+        </div>
+        <div id="baslangic-onay" class="secim-onay" style="display:none;"></div>
+      </div>
+      <div class="input-grup">
+        <span class="ikon">🔴</span>
+        <input type="text" id="hedef" list="duraklar"
+               placeholder="Nereye? (örn. Kadıköy)" autocomplete="off">
+      </div>
+      <div class="secim-blok" id="hedef-secim">
+        <div class="secim-baslik">② Hedef durağını seçin</div>
+        <div class="secim-grid">
+          <div>
+            <label class="secim-label" for="hedef-ilce">İlçe</label>
+            <select id="hedef-ilce" class="secim-select" disabled>
+              <option value="">— İlçe seçin —</option>
+            </select>
+          </div>
+          <div>
+            <label class="secim-label" for="hedef-durak">Durak</label>
+            <select id="hedef-durak" class="secim-select" disabled>
+              <option value="">— Durak seçin —</option>
+            </select>
+          </div>
+        </div>
+        <div id="hedef-onay" class="secim-onay" style="display:none;"></div>
+      </div>
+      <datalist id="duraklar"></datalist>
+
+      <div class="strateji-grid" id="strateji-grid">
+        <button class="strateji-btn" data-strateji="hizli">⚡<br>En Hızlı</button>
+        <button class="strateji-btn aktif" data-strateji="aktarma">🔄<br>En Az Aktarma</button>
+
+      </div>
+
+      <button id="ara-btn" class="ara-btn" disabled style="opacity:0.5;" title="Lütfen her iki durak için ilçe ve ulaşım türünü seçin">🔍 Rota Bul</button>
+      <div id="hata-alani"></div>
+    </div>
+
+    <div id="sonuc-alani"></div>
+
+    <!-- ═══ Hat Profil Bileşeni ═══════════════════════════════ -->  <!-- YENİ -->
+    <div class="hp-kart" id="hp-panel" style="display:none;">  <!-- YENİ -->
+      <div class="hp-baslik">🚌 Otobüs Hat Profili</div>  <!-- YENİ -->
+      <div class="hp-kontrol">  <!-- YENİ -->
+        <select id="hp-hat-sec"><option value="">Hat seçin...</option></select>  <!-- YENİ -->
+        <button class="hp-yon-btn aktif" id="hp-yon-ileri" data-yon="ileri">İleri</button>  <!-- YENİ -->
+        <button class="hp-yon-btn" id="hp-yon-geri" data-yon="reverse">Geri</button>  <!-- YENİ -->
+      </div>  <!-- YENİ -->
+      <div class="hp-istatistik" id="hp-istatistik" style="display:none;">  <!-- YENİ -->
+        <span>Durak: <strong id="hp-durak-sayi">0</strong></span>  <!-- YENİ -->
+        <span>Mesafe: <strong id="hp-toplam-km">0</strong> km</span>  <!-- YENİ -->
+      </div>  <!-- YENİ -->
+      <div class="hp-chart-wrap" id="hp-chart-wrap" style="display:none;">  <!-- YENİ -->
+        <canvas id="hp-chart"></canvas>  <!-- YENİ -->
+      </div>  <!-- YENİ -->
+      <div class="hp-durak-liste" id="hp-durak-liste" style="display:none;"></div>  <!-- YENİ -->
+    </div>  <!-- YENİ -->
+
+  </aside>
+
+  <!-- ═══ Harita ═══════════════════════════════════════════════ -->
+  <div id="harita-konteyner" style="position: relative;">
+    <div id="harita"></div>
+  </div>
+
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<!-- Chart.js CDN -->  <!-- YENİ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>  <!-- YENİ -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   Akıllı Şehir Navigasyonu — Frontend
+   ═══════════════════════════════════════════════════════════════════
+   Mimari:
+     • Başlangıçta harita BOŞ — sadece İstanbul tile layer
+     • Rota aranana kadar hiçbir polyline/marker çizilmez
+     • Rota gelince ÖNCE eski rota tamamen temizlenir, SONRA yeni rota çizilir
+     • Aynı anda yalnızca tek bir rota görünür
+   ═══════════════════════════════════════════════════════════════════ */
+
+const $ = (id) => document.getElementById(id);
+
+// Okunabilir hat isimlerinin renkleri
+const HAT_RENK_SOZLUK = {
+  "Taksim-Kabataş Füniküler":  "#E87722",
+  "Kabataş-Kadıköy Vapuru":    "#00A0B0",
+  "Eminönü-Kadıköy Vapuru":    "#00A0B0",
+  "Eminönü-Üsküdar Vapuru":    "#00A0B0",
+  "Kadıköy-Eminönü Vapuru":    "#00A0B0",
+  "Üsküdar-Eminönü Vapuru":    "#00A0B0",
+  "Kabataş-Eminönü Vapuru":    "#00A0B0",
+};
+
+const HAT_TIPI_IKON = {
+  "Metro": "🚇", "Tramvay": "🚋", "Tren": "🚆",
+  "Marmaray": "🚆", "Otobüs": "🚌", "Vapur": "⛴️",
+  "Teleferik": "🚠", "Füniküler": "🚞", "Dolmuş": "🚌",
+  "Minibüs": "🚌", "Metrobüs": "🚌",
+};
+
+const HAT_TIPI_RENK_MAP = {
+  "Metro": "#1A4F8A", "Tramvay": "#E30613", "Tren": "#6D4C41",
+  "Marmaray": "#6D4C41", "Vapur": "#00A0B0", "Füniküler": "#E87722",
+  "Teleferik": "#E87722", "Metrobüs": "#8CC63F",
+  "Otobüs": "#F59E0B", "Dolmuş": "#F59E0B", "Minibüs": "#F59E0B", "Yürüme": "#888888",
+};
+
+function hatTipiBul(hatAdi) {
+  if (!hatAdi) return "Otobüs";
+  if (hatAdi === "YURUME" || hatAdi === "Yürüme" || hatAdi === "yurume") return "Yürüme";
+  if (hatAdi.includes("Vapuru") || hatAdi.includes("Vapur")) return "Vapur";
+  if (hatAdi.includes("Füniküler")) return "Füniküler";
+  if (hatAdi.includes("Teleferik")) return "Teleferik";
+  if (hatAdi === "Marmaray" || hatAdi.startsWith("Marmaray")) return "Marmaray";
+  // Raylı hat kodları — durum tanıma (state.hatBilgisi yüklenmeden önce de çalışır)
+  if (/^M\d+$/.test(hatAdi)) return "Metro";
+  if (/^T\d+$/.test(hatAdi)) return "Tramvay";
+  if (/^F\d+$/.test(hatAdi)) return "Füniküler";
+  if (/^TF\d+$/.test(hatAdi)) return "Teleferik";
+  const bilgiObj = state.hatBilgisi[hatAdi];
+  if (bilgiObj && bilgiObj.tipi) return bilgiObj.tipi;
+  return "Otobüs";
+}
+
+function hatRenkBul(hatAdi) {
+  if (!hatAdi) return "#F59E0B";
+  if (HAT_RENK_SOZLUK[hatAdi]) return HAT_RENK_SOZLUK[hatAdi];
+  // Tip bazlı renk öncelikli (GTFS per-line rengi tutarsız olabilir)
+  const tipi = hatTipiBul(hatAdi);
+  if (tipi && tipi !== "Otobüs") return HAT_TIPI_RENK_MAP[tipi] || "#F59E0B";
+  // Otobüs için GTFS rengi kullan (farklı olabilir), yoksa sarı
+  const bilgiObj = state.hatBilgisi[hatAdi];
+  if (bilgiObj && bilgiObj.renk) return bilgiObj.renk;
+  return HAT_TIPI_RENK_MAP["Otobüs"];
+}
+
+const state = {
+  istasyonAdlari: [],          // ["Aksaray", ...] — autocomplete için
+  koordinatlar:   {},          // ad → {lat, lon}
+  hatBilgisi:     {},          // hat_adi → {tipi, renk}
+  strateji:       "aktarma",
+  harita:         null,
+  rotaKatmani:    null,        // L.layerGroup — TEK rota katmanı
+  secimler:       { baslangic: null, hedef: null },
+  secimAdaylar:   { baslangic: [], hedef: [] },
+};
+
+
+/* ═══ 1) Başlatma ═══════════════════════════════════════════════ */
+
+function haritaBaslat() {
+  state.harita = L.map("harita", {
+    center: [41.015, 28.97],     // İstanbul merkezi
+    zoom: 11,
+    zoomControl: true,
+    attributionControl: true,
+  });
+
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "© OpenStreetMap, © CARTO",
+  }).addTo(state.harita);
+
+  // Rota katmanı — başlangıçta boş, kullanıcı arama yapana kadar dokunulmaz
+  state.rotaKatmani = L.layerGroup().addTo(state.harita);
+}
+
+
+async function veriYukle() {
+  // İki paralel istek:
+  //   • /api/istasyonlar  → autocomplete listesi
+  //   • /api/graf         → koordinat ve hat renk/tip eşleşmesi
+  //                          (haritada hiçbir şey çizmek için DEĞİL — sadece
+  //                           rota geldiğinde yol[i]'lerin lat/lon karşılığı
+  //                           ile hat renklerini bulmak için)
+  try {
+    const [adlar, graf] = await Promise.all([
+      fetch("/api/istasyonlar").then((r) => r.json()),
+      fetch("/api/graf").then((r) => r.json()),
+    ]);
+
+    state.istasyonAdlari = adlar;
+    autocompleteDoldur(adlar);
+
+    // İETT durakları koordinatlarını ekle (sadece koordinat, isim backend'den geliyor)
+    fetch("/api/iett-duraklar")
+      .then(r => r.json())
+      .then(list => {
+        list.forEach(d => {
+          if (d.lat && d.lon && !state.koordinatlar[d.ad]) {
+            state.koordinatlar[d.ad] = { lat: d.lat, lon: d.lon };
+          }
+        });
+      })
+      .catch(() => {});
+
+    graf.istasyonlar.forEach((i) => {
+      if (i.lat != null) state.koordinatlar[i.ad] = { lat: i.lat, lon: i.lon };
+    });
+    graf.hatlar.forEach((h) => {
+      if (!state.hatBilgisi[h.hat_adi]) {
+        state.hatBilgisi[h.hat_adi] = { tipi: h.hat_tipi, renk: h.renk };
+      }
+    });
+  } catch (err) {
+    hataGoster("Veriler yüklenemedi: " + err.message);
+  }
+}
+
+function autocompleteDoldur(adlar) {
+  $("duraklar").innerHTML = adlar.map((a) => `<option value="${a}">`).join("");
+}
+
+// Dinamik arama + seçim: kullanıcı yazarken durak önerisi + ilçe/tür seçenekleri
+let _araTimeout = null;
+
+// ─── Durak seçim türü için kısa etiket ────────────────────────────────────
+function _turIkon(tur) {
+  if (!tur) return "";
+  const t = tur.toLowerCase();
+  if (t.includes("metro"))      return "🚇";
+  if (t.includes("tramvay"))    return "🚋";
+  if (t.includes("marmaray"))   return "🚆";
+  if (t.includes("tren"))       return "🚆";
+  if (t.includes("vapur"))      return "⛴";
+  if (t.includes("otobüs"))     return "🚌";
+  if (t.includes("dolmuş"))     return "🚐";
+  if (t.includes("füniküler"))  return "🚞";
+  if (t.includes("teleferik"))  return "🚡";
+  if (t.includes("metrobüs"))   return "🚌";
+  if (t.includes("rayli"))      return "🚉";
+  return "🛑";
+}
+
+function secimReset(kim) {
+  state.secimler[kim] = null;
+  state.secimAdaylar[kim] = [];
+  const ilceSel  = $(`${kim}-ilce`);
+  const durakSel = $(`${kim}-durak`);
+  ilceSel.innerHTML  = '<option value="">— İlçe seçin —</option>';
+  ilceSel.disabled   = true;
+  durakSel.innerHTML = '<option value="">— Durak seçin —</option>';
+  durakSel.disabled  = true;
+  const onayEl = $(`${kim}-onay`);
+  if (onayEl) onayEl.style.display = "none";
+  rotaBulDurumGuncelle();
+}
+
+function secimIlceDoldur(kim, secenekler) {
+  const ilceSel = $(`${kim}-ilce`);
+  const ilceler = [...new Set(secenekler.map(s => s.ilce || "İstanbul"))]
+    .sort((a, b) => a.localeCompare(b, "tr"));
+  ilceSel.innerHTML = '<option value="">İlçe seçin</option>'
+    + ilceler.map(i => `<option value="${i}">${i}</option>`).join("");
+  ilceSel.disabled = ilceler.length === 0;
+  if (ilceler.length === 1) {
+    ilceSel.value = ilceler[0];
+    secimDurakDoldur(kim, ilceler[0]);
+  }
+}
+
+// Seçilen ilçedeki durağı (tip bilgisiyle birlikte) listele
+function secimDurakDoldur(kim, ilce) {
+  const durakSel = $(`${kim}-durak`);
+  const secenekler = state.secimAdaylar[kim] || [];
+  // İlçeye göre filtrele — her seçenek tek bir durak+tur kombinasyonu
+  const ilceSec = secenekler.filter(s => (s.ilce || "İstanbul") === ilce);
+  state.secimler[kim] = null;
+
+  if (ilceSec.length === 0) {
+    durakSel.innerHTML = '<option value="">— Durak bulunamadı —</option>';
+    durakSel.disabled = true;
+    rotaBulDurumGuncelle();
+    return;
+  }
+
+  // Eğer tek seçenek varsa label gösterme (tur bilgisi gereksiz)
+  durakSel.innerHTML = '<option value="">Durak seçin</option>'
+    + ilceSec.map((s, idx) => {
+        const tur = s.tur || "";
+        const ikon = _turIkon(tur);
+        // Aynı ilçede birden fazla seçenek varsa tur bilgisini göster
+        const label = ilceSec.length > 1 ? `${ikon} ${s.ad} — ${tur}` : `${ikon} ${s.ad}`;
+        return `<option value="${idx}">${label}</option>`;
+      }).join("");
+  durakSel.disabled = false;
+
+  // Tek seçenek varsa otomatik seç
+  if (ilceSec.length === 1) {
+    durakSel.value = "0";
+    secimKaydet(kim, ilce, 0);
+  }
+}
+
+// idx: ilçe filtrelenmiş dizideki index
+function secimKaydet(kim, ilce, idx) {
+  const secenekler = state.secimAdaylar[kim] || [];
+  const ilceSec = secenekler.filter(s => (s.ilce || "İstanbul") === ilce);
+  const secim = ilceSec[idx] || null;
+  state.secimler[kim] = secim || null;
+  // Onay rozeti
+  const onayEl = $(`${kim}-onay`);
+  if (onayEl) {
+    if (secim) {
+      const tur = secim.tur || "";
+      const ikon = _turIkon(tur);
+      onayEl.innerHTML = `${ikon} <strong>${secim.ad}</strong> &nbsp;·&nbsp; ${ilce}${tur ? ` &nbsp;·&nbsp; ${tur}` : ""}`;
+      onayEl.style.display = "flex";
+    } else {
+      onayEl.style.display = "none";
+    }
+  }
+  rotaBulDurumGuncelle();
+}
+
+async function secimAdayYukle(kim, q) {
+  try {
+    const r = await fetch(`/api/durak-secim?q=${encodeURIComponent(q)}`);
+    const veri = await r.json();
+    const secenekler = Array.isArray(veri.secenekler) ? veri.secenekler : [];
+    state.secimAdaylar[kim] = secenekler;
+    secimIlceDoldur(kim, secenekler);
+  } catch {}
+}
+
+function dinamikArama(inputEl, kim) {
+  clearTimeout(_araTimeout);
+  const q = inputEl.value.trim();
+  secimReset(kim);
+  if (q.length < 2) return;
+  _araTimeout = setTimeout(async () => {
+    try {
+      const [r1] = await Promise.all([
+        fetch(`/api/durak-ara?q=${encodeURIComponent(q)}&fmt=isim`),
+        secimAdayYukle(kim, q),
+      ]);
+      const sonuclar = await r1.json();
+      if (Array.isArray(sonuclar) && sonuclar.length) {
+        const mevcut = new Set(state.istasyonAdlari);
+        const yeniAdlar = sonuclar.filter(s => !mevcut.has(s));
+        if (yeniAdlar.length) {
+          const mevcutOptions = $("duraklar").innerHTML;
+          $("duraklar").innerHTML = mevcutOptions
+            + yeniAdlar.map(a => `<option value="${a}">`).join("");
+          yeniAdlar.forEach(a => mevcut.add(a));
+          state.istasyonAdlari = Array.from(mevcut);
+        }
+      }
+    } catch {}
+  }, 250);
+}
+
+["baslangic", "hedef"].forEach(id => {
+  $(id).addEventListener("input", (e) => dinamikArama(e.target, id));
+});
+
+["baslangic", "hedef"].forEach(kim => {
+  $(`${kim}-ilce`).addEventListener("change", (e) => {
+    // İlçe değişince durak listesini güncelle, önceki seçimi sıfırla
+    state.secimler[kim] = null;
+    const onayEl = $(`${kim}-onay`);
+    if (onayEl) onayEl.style.display = "none";
+    rotaBulDurumGuncelle();
+    secimDurakDoldur(kim, e.target.value);
+  });
+  $(`${kim}-durak`).addEventListener("change", (e) => {
+    const ilce = $(`${kim}-ilce`).value;
+    secimKaydet(kim, ilce, parseInt(e.target.value, 10));
+  });
+});
+
+
+/* ═══ 2) Strateji butonları ════════════════════════════════════ */
+
+document.querySelectorAll("#strateji-grid .strateji-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#strateji-grid .strateji-btn")
+      .forEach((b) => b.classList.remove("aktif"));
+    btn.classList.add("aktif");
+    state.strateji = btn.dataset.strateji;
+  });
+});
+
+
+/* ═══ 3) Rota arama ════════════════════════════════════════════ */
+
+$("ara-btn").addEventListener("click", rotaAra);
+$("baslangic").addEventListener("keydown", (e) => { if (e.key === "Enter") rotaAra(); });
+$("hedef").addEventListener("keydown",     (e) => { if (e.key === "Enter") rotaAra(); });
+
+function rotaBulDurumGuncelle() {
+  const basSec = state.secimler.baslangic;
+  const hdfSec = state.secimler.hedef;
+  const btn = $("ara-btn");
+  const hazir = basSec && hdfSec;
+  btn.disabled = !hazir;
+  btn.style.opacity = hazir ? "1" : "0.5";
+  btn.title = hazir ? "" : "Lütfen başlangıç ve hedef durağını seçin";
+}
+
+async function rotaAra() {
+  const baslangic = $("baslangic").value.trim();
+  const hedef     = $("hedef").value.trim();
+
+  hataTemizle();
+
+  if (!baslangic || !hedef)  return hataGoster("Lütfen başlangıç ve hedef girin.");
+
+  const basSec = state.secimler.baslangic;
+  const hdfSec = state.secimler.hedef;
+  if (!basSec || !hdfSec) return hataGoster("Lütfen başlangıç ve hedef durağını seçin.");
+
+  // Aynı durak kontrolü
+  const ortakId = (basSec.stop_ids || []).some(id => (hdfSec.stop_ids || []).includes(id));
+  const ayniDurak = ortakId && basSec.ilce === hdfSec.ilce;
+  if (ayniDurak) return hataGoster("Başlangıç ve hedef aynı olamaz.");
+
+  const btn = $("ara-btn");
+  btn.disabled    = true;
+  btn.innerHTML   = '<span class="spinner"></span> Hesaplanıyor...';
+  $("sonuc-alani").innerHTML = "";
+
+  try {
+    const basLabel = basSec.display || `${baslangic} (${basSec.ilce || "İstanbul"})`;
+    const hdfLabel = hdfSec.display || `${hedef} (${hdfSec.ilce || "İstanbul"})`;
+    const resp = await fetch("/api/akilli-rota", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        baslangic, hedef, strateji: state.strateji,
+        bas_label: basLabel, hdf_label: hdfLabel,
+        bas_stop_ids: basSec.stop_ids,
+        hdf_stop_ids: hdfSec.stop_ids,
+        bas_sistem: basSec.sistem,
+        hdf_sistem: hdfSec.sistem,
+        bas_ilce: basSec.ilce,
+        hdf_ilce: hdfSec.ilce,
+        bas_tur: basSec.tur,
+        hdf_tur: hdfSec.tur,
+      }),
+    });
+    const veri = await resp.json();
+
+    if (!resp.ok || !veri.rotalar || !veri.rotalar.length) {
+      hataGoster(veri.hata || "Rota bulunamadı");
+      haritayiTemizle();
+      return;
+    }
+
+    const rota = veri.rotalar[0];
+
+    // Hat renklerini ve tiplerini hatBilgisi'ne ekle
+    if (rota.hatlar && rota.hat_renkleri) {
+      rota.hatlar.forEach((hat, i) => {
+        if (hat && hat !== "YURUME" && hat !== "Yürüme" && hat !== "yurume" && !hat.startsWith("aktarma_") && !state.hatBilgisi[hat]) {
+          const renk = rota.hat_renkleri[i];
+          const tipi = hatTipiBul(hat);  // pattern-based detection, not "Otobüs" for all
+          if (renk) state.hatBilgisi[hat] = { tipi, renk };
+        }
+      });
+    }
+
+    sonucKartiCiz(rota);
+    haritayaRotaCiz(rota);
+  } catch (err) {
+    hataGoster("Sunucuya bağlanılamadı: " + err.message);
+    haritayiTemizle();
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = "🔍 Rota Bul";
+  }
+}
+
+
+/* ═══ 4) Sonuç kartı ═══════════════════════════════════════════ */
+
+function sonucKartiCiz(rota) {
+  // Hat zinciri (ardışık tekrarsız): ["M2","M2","Marmaray","M4"] → ["M2","Marmaray","M4"]
+  const zincir = [];
+  rota.hatlar.forEach((h) => {
+    if (h.startsWith("aktarma_") || h === "YURUME" || h === "Yürüme" || h === "yurume" || h === "Aktarma") return;
+    if (!zincir.length || zincir[zincir.length - 1] !== h) zincir.push(h);
+  });
+
+  const hatHTML = zincir.map((ad, i) => {
+    const renk = hatRenkBul(ad);
+    return (i > 0 ? '<span class="hat-ok">→</span>' : "")
+      + `<span class="hat-rozet" style="background:${renk}">${ad}</span>`;
+  }).join("");
+
+  const adimlar = adimlariUret(rota);
+  const adimlarHTML = adimlar.map(adimHTML).join("");
+
+  const beklemeNotu = rota.bekleme_dahil
+    ? `<div style="text-align:center; font-size:11px; color:var(--soluk); margin-top:6px;">
+         Bekleme ve aktarma süreleri dahildir
+       </div>`
+    : "";
+
+  $("sonuc-alani").innerHTML = `
+    <div class="kart">
+      <div class="ozet-baslik">${rota.strateji} • Rota Bulundu</div>
+      <div class="istatistikler">
+        <div class="istatistik-kutu">
+          <div class="deger">${rota.sure}</div>
+          <div class="etiket">dk ${rota.bekleme_dahil ? "(bekleme dahil)" : ""}</div>
+        </div>
+        <div class="istatistik-kutu"><div class="deger">${rota.aktarma}</div><div class="etiket">Aktarma</div></div>
+        <div class="istatistik-kutu"><div class="deger">${rota.yol.length}</div><div class="etiket">Durak</div></div>
+      </div>
+      ${beklemeNotu}
+      <div class="hat-zinciri">${hatHTML}</div>
+    </div>
+
+    <div class="adimlar-baslik">📋 Adım Adım Yol Tarifi</div>
+    <div class="adimlar">${adimlarHTML}</div>
+  `;
+}
+
+
+/* ═══ 5) Adım üretimi ══════════════════════════════════════════
+   Backend formatı:
+     yol     = ["Taksim", "Şişhane", "Yenikapı", "Kadıköy"]
+     hatlar  = ["M2", "M2", "Marmaray", "M4"]   // her segment (i → i+1) için 1 hat
+     aktarma = ["Yenikapı", "Ayrılık Çeşmesi"]
+
+   Üretilen adım dizisi:
+     1) BAS:     Başlangıç durağı + ilk hatta bin
+     2) ARA:     Aktarmalar arası "(N durak)" özet satırı
+     3) AKTARMA: durak + eski_hat → yeni_hat
+     4) SON:     Son durakta in
+   ════════════════════════════════════════════════════════════ */
+
+function adimlariUret(rota) {
+  const adimlar = [];
+  const yol     = rota.yol;
+  const hatlar  = rota.hatlar;
+  if (!yol.length || !hatlar.length) return adimlar;
+
+  const bilgi = (h) => ({ tipi: hatTipiBul(h), renk: hatRenkBul(h) });
+
+  // router.py'den gelen adimlar varsa direkt kullan
+  if (rota.adimlar && rota.adimlar.length > 0) {
+    let ilkBas = true;
+    rota.adimlar.forEach((a) => {
+      switch(a.tip) {
+        case "bin": {
+          const tipi = hatTipiBul(a.hat);
+          const renk = hatRenkBul(a.hat);
+          adimlar.push({ tip:"bas", durak:a.durak, hat:a.hat, tipi, renk, ilk: ilkBas });
+          ilkBas = false;
+          break;
+        }
+        case "devam":
+          adimlar.push({ tip:"ara", durak:`${a.durak_sayisi} durak` });
+          break;
+        case "aktarma": {
+          const eT = hatTipiBul(a.hat_den), eR = hatRenkBul(a.hat_den);
+          const yT = hatTipiBul(a.hat_e),   yR = hatRenkBul(a.hat_e);
+          adimlar.push({ tip:"aktarma", durak:a.durak,
+            eskiHat:a.hat_den, yeniHat:a.hat_e,
+            eskiTipi:eT, yeniTipi:yT, eskiRenk:eR, yeniRenk:yR });
+          break;
+        }
+        case "yurume":
+          adimlar.push({ tip:"yurume", durak_den:a.durak_den, durak_e:a.durak_e });
+          break;
+        case "in": {
+          let sonHat = a.hat && a.hat !== "YURUME" && a.hat !== "Yürüme" && a.hat !== "yurume" ? a.hat : null;
+          if (!sonHat) {
+            for (let hi = rota.hatlar.length - 1; hi >= 0; hi--) {
+              if (rota.hatlar[hi] && rota.hatlar[hi] !== "YURUME" && rota.hatlar[hi] !== "Yürüme" && rota.hatlar[hi] !== "yurume") {
+                sonHat = rota.hatlar[hi]; break;
+              }
+            }
+          }
+          adimlar.push({ tip:"son", durak:a.durak, hat:sonHat,
+            tipi:hatTipiBul(sonHat), renk:hatRenkBul(sonHat) });
+          break;
+        }
+      }
+    });
+    // Ara adımlarına iniş durağı ekle: "3 durak" → sonraki aktarma/son durağı
+    for (let i = 0; i < adimlar.length; i++) {
+      if (adimlar[i].tip === "ara") {
+        for (let j = i + 1; j < adimlar.length; j++) {
+          const nxt = adimlar[j];
+          if (nxt.tip === "aktarma" || nxt.tip === "son") {
+            adimlar[i].inDurak = nxt.durak;
+            break;
+          }
+        }
+      }
+    }
+    return adimlar;
+  }
+
+  // Aktarma indislerini bul (yol[i] = hat değişikliği)
+  // i. duraktan ÖNCE hat[i-1], SONRA hat[i] çalışır.
+  const aktarmaIndisleri = [];
+  for (let i = 1; i < hatlar.length; i++) {
+    if (hatlar[i] !== hatlar[i - 1]) aktarmaIndisleri.push(i);
+  }
+
+  // 1) Başlangıç
+  const ilkHat = hatlar[0];
+  adimlar.push({
+    tip:    "bas",
+    durak:  yol[0],
+    hat:    ilkHat,
+    tipi:   bilgi(ilkHat).tipi,
+    renk:   bilgi(ilkHat).renk,
+  });
+
+  // Yol bölümleri: [0 → ilk_aktarma], [ilk_aktarma → ikinci_aktarma], ..., [son_aktarma → son]
+  let oncekiSinir = 0;
+  for (const ai of aktarmaIndisleri) {
+    // Ara duraklar: oncekiSinir+1 .. ai-1 (yol[ai] aktarma noktası)
+    const aradaki = ai - oncekiSinir - 1;
+    if (aradaki > 0) {
+      const _araHat = hatlar[oncekiSinir] || "";
+      const _yurumeSeg = _araHat === "YURUME" || _araHat === "Yürüme" || _araHat === "yurume";
+      if (!_yurumeSeg) {
+        adimlar.push({
+          tip:   "ara",
+          durak: `${aradaki} durak`,
+        });
+      }
+    }
+
+    // Aktarma adımı
+    const eskiHat = hatlar[ai - 1];
+    const yeniHat = hatlar[ai];
+    adimlar.push({
+      tip:      "aktarma",
+      durak:    yol[ai],
+      eskiHat,
+      yeniHat,
+      eskiTipi: bilgi(eskiHat).tipi,
+      yeniTipi: bilgi(yeniHat).tipi,
+      eskiRenk: bilgi(eskiHat).renk,
+      yeniRenk: bilgi(yeniHat).renk,
+    });
+    oncekiSinir = ai;
+  }
+
+  // Son bölüm — son aktarmadan hedefe ara duraklar
+  const sonAraDurak = (yol.length - 1) - oncekiSinir - 1;
+  if (sonAraDurak > 0) {
+    const _sonHatSeg = hatlar[oncekiSinir] || "";
+    const _sonYurume = _sonHatSeg === "YURUME" || _sonHatSeg === "Yürüme" || _sonHatSeg === "yurume";
+    if (!_sonYurume) {
+      adimlar.push({
+        tip:   "ara",
+        durak: `${sonAraDurak} durak`,
+      });
+    }
+  }
+
+  // 4) Bitiş
+  const sonHat = hatlar[hatlar.length - 1];
+  adimlar.push({
+    tip:   "son",
+    durak: yol[yol.length - 1],
+    hat:   sonHat,
+    tipi:  bilgi(sonHat).tipi,
+    renk:  bilgi(sonHat).renk,
+  });
+
+  // Aynı durakta ardışık aktarmaları birleştir
+  const temizAdimlar = [];
+  for (let i = 0; i < adimlar.length; i++) {
+    const a = adimlar[i];
+    const onceki = temizAdimlar[temizAdimlar.length - 1];
+    if (a.tip === "aktarma" && onceki && onceki.tip === "aktarma" && onceki.durak === a.durak) {
+      onceki.yeniHat  = a.yeniHat;
+      onceki.yeniRenk = a.yeniRenk;
+      onceki.yeniTipi = a.yeniTipi;
+      continue;
+    }
+    temizAdimlar.push(a);
+  }
+
+  // Yürüme aktarma adımlarını yurume tipine çevir + sonrasında biniş adımı ekle
+  const isYurumeHat = (h) => h === "YURUME" || h === "Yürüme" || h === "yurume";
+  const sonAdimlar = [];
+  for (let i = 0; i < temizAdimlar.length; i++) {
+    const a = temizAdimlar[i];
+    if (a.tip === "aktarma" && isYurumeHat(a.yeniHat)) {
+      const durakDen = a.durak;
+      let durakE = durakDen, yeniHat = null, j = i + 1;
+      while (j < temizAdimlar.length) {
+        const nxt = temizAdimlar[j];
+        if (nxt.tip === "aktarma" && isYurumeHat(nxt.eskiHat)) {
+          durakE = nxt.durak; yeniHat = nxt.yeniHat; j++; break;
+        }
+        j++;
+      }
+      if (durakDen !== durakE) {
+        sonAdimlar.push({ tip: "yurume", durak_den: durakDen, durak_e: durakE });
+      }
+      // Yürüme sonrası binen hat için biniş adımı ekle
+      if (yeniHat && !isYurumeHat(yeniHat)) {
+        const bT = hatTipiBul(yeniHat), bR = hatRenkBul(yeniHat);
+        sonAdimlar.push({ tip: "bas", durak: durakE, hat: yeniHat, tipi: bT, renk: bR, ilk: false });
+      }
+      i = j - 1;
+      continue;
+    }
+    sonAdimlar.push(a);
+  }
+  return sonAdimlar;
+}
+
+
+function adimHTML(a) {
+  const ikonHat = (t) => HAT_TIPI_IKON[t] || "🚏";
+  const isYurumeHat = (h) => h === "YURUME" || h === "Yürüme" || h === "yurume";
+
+  let ikonGosterim, baslik, aciklama = "";
+  switch (a.tip) {
+    case "bas": {
+      const tipiIkon = ikonHat(a.tipi);
+      if (isYurumeHat(a.hat)) {
+        ikonGosterim = "🟢";
+        baslik = `${a.durak} durağından yürüyerek başla`;
+        aciklama = `<span class="adim-rozet" style="background:#888">🚶 Yürüme</span>`;
+      } else if (a.ilk === false) {
+        // Yürüme sonrası aktarma binişi — yeşil "başla" değil turuncu aktarma
+        ikonGosterim = "🔄";
+        baslik = `${a.durak} durağında aktarma`;
+        aciklama = `<span class="adim-rozet" style="background:${a.renk || '#666'}">${tipiIkon} ${a.hat}</span> hattına bin`;
+      } else {
+        ikonGosterim = "🟢";
+        baslik = `${a.durak} durağından başla`;
+        aciklama = `<span class="adim-rozet" style="background:${a.renk || '#666'}">${tipiIkon} ${a.hat}</span> hattına bin`;
+      }
+      break;
+    }
+
+    case "aktarma": {
+      if (!a.yeniHat || (a.yeniHat || "").startsWith("aktarma_")) return "";
+      if (isYurumeHat(a.yeniHat) || isYurumeHat(a.eskiHat)) {
+        ikonGosterim = "🚶";
+        if (isYurumeHat(a.yeniHat)) {
+          baslik = `${a.durak} durağında in`;
+          aciklama = `<span class="adim-rozet" style="background:#888">🚶 Yürü</span> bir sonraki durağa yürüyerek geç`;
+        } else {
+          baslik = `${a.durak} durağına yürü`;
+          aciklama = `<span class="adim-rozet" style="background:${a.yeniRenk || '#F59E0B'}">${ikonHat(a.yeniTipi)} ${a.yeniHat}</span> hattına bin`;
+        }
+        break;
+      }
+      ikonGosterim = "🔁";
+      baslik = `${a.durak} durağında in`;
+      const _eski = (a.eskiHat || "").startsWith("aktarma_") ? null : a.eskiHat;
+      const _yeni = a.yeniHat;
+      aciklama = (_eski ? `<span class="adim-rozet" style="background:${a.eskiRenk || '#666'}">${ikonHat(a.eskiTipi)} ${_eski}</span> hattından in, ` : ``)
+               + `<span class="adim-rozet" style="background:${a.yeniRenk || '#666'}">${ikonHat(a.yeniTipi)} ${_yeni}</span> hattına bin`;
+      break;
+    }
+
+    case "son": {
+      ikonGosterim = "🏁";
+      const durakTemiz = (a.durak || "").replace(/\s*\([^)]+\)$/, "").trim() || a.durak;
+      baslik = `${durakTemiz} — vardın!`;
+      const _sonHat = (isYurumeHat(a.hat) || !a.hat) ? null : a.hat;
+      if (_sonHat && !_sonHat.startsWith("aktarma_")) {
+        aciklama = `<span class="adim-rozet" style="background:${a.renk || '#666'}">${ikonHat(a.tipi)} ${_sonHat}</span>`
+                 + ` ile geldin 🎉`;
+      } else {
+        aciklama = `Varışa ulaştın 🎉`;
+      }
+      break;
+    }
+
+    case "yurume":
+      ikonGosterim = "🚶";
+      baslik = `${a.durak_den} durağından yürü`;
+      aciklama = `<span class="adim-rozet" style="background:#888">👟 Yürüme</span> → ${a.durak_e} durağına geç`;
+      break;
+
+    case "ara":
+      if (a.yurume) return "";
+      ikonGosterim = "⚪";
+      baslik = `${a.durak} devam et`;
+      if (a.inDurak) aciklama = `<span style="color:#888;font-size:12px">📍 <b>${a.inDurak}</b> durağında in</span>`;
+      break;
+
+    default:
+      ikonGosterim = "📍";
+      baslik = a.durak || "";
+  }
+
+  return `
+    <div class="adim ${a.tip}">
+      <div class="adim-ikon">${ikonGosterim}</div>
+      <div class="adim-icerik">
+        <div class="adim-baslik">${baslik}</div>
+        ${aciklama ? `<div class="adim-aciklama">${aciklama}</div>` : ""}
+      </div>
+    </div>`;
+}
+
+
+/* ═══ 6) Harita: yalnızca rota çizimi ═══════════════════════════ */
+
+function haritayiTemizle() {
+  state.rotaKatmani.clearLayers();
+}
+
+function haritayaRotaCiz(rota) {
+  // ÖNCE eski rotayı tamamen temizle — aynı anda yalnızca tek rota görünür
+  haritayiTemizle();
+
+  const yol     = rota.yol;
+  const hatlar  = rota.hatlar;
+
+  // Aynı hat ardışık ise tek polyline → görsel olarak sürekli çizgi
+  const segmentler = [];
+  let mevcut = null;
+
+  // Önce rota.koordinatlar varsa direkt kullan (İETT), yoksa state.koordinatlar'a bak
+  const koordList = rota.koordinatlar || [];
+  const koordByName = (ad) => {
+    if (state.koordinatlar[ad]) return state.koordinatlar[ad];
+    return null;
+  };
+
+  for (let i = 0; i < hatlar.length; i++) {
+    let a, b;
+    if (koordList.length > i + 1) {
+      const ka = koordList[i];
+      const kb = koordList[i + 1];
+      if (ka && ka[0] && kb && kb[0]) {
+        a = { lat: ka[0], lon: ka[1] };
+        b = { lat: kb[0], lon: kb[1] };
+      }
+    }
+    // Sadece rota.koordinatlar'dan al, state.koordinatlar'a fallback yapma
+    if (!a && koordList.length === 0) a = koordByName(yol[i]);
+    if (!b && koordList.length === 0) b = koordByName(yol[i + 1]);
+    if (!a || !b) continue;
+
+    const hatAdi = hatlar[i];
+    const renk   = (rota.hat_renkleri && rota.hat_renkleri[i])
+                   || HAT_RENK_SOZLUK[hatAdi]
+                   || (state.hatBilgisi[hatAdi] || {}).renk 
+                   || "#F59E0B";
+
+    if (mevcut && mevcut.hat === hatAdi) {
+      mevcut.koordinatlar.push([b.lat, b.lon]);
+    } else {
+      mevcut = {
+        hat: hatAdi,
+        renk,
+        koordinatlar: [[a.lat, a.lon], [b.lat, b.lon]],
+      };
+      segmentler.push(mevcut);
+    }
+  }
+
+  const sinirlar = [];
+  // Polyline — backend segmentler (index-aligned, bug'sız)
+  (rota.segmentler || []).forEach(seg => {
+    if (!seg.coords || seg.coords.length < 2) return;
+    const gecerli = seg.coords.filter(k => Array.isArray(k) && k.length === 2);
+    if (gecerli.length < 2) return;
+    const isYurume = seg.yurume === true || seg.hat === "YURUME" || seg.hat === "Yürüme" || seg.hat === "yurume";
+    L.polyline(gecerli, {
+      color:     isYurume ? "#888888" : seg.renk,
+      weight:    isYurume ? 6 : 7,
+      opacity:   isYurume ? 0.9 : 1,
+      dashArray: isYurume ? "6,8" : undefined,
+      lineCap:   "round",
+      lineJoin:  "round",
+    }).addTo(state.rotaKatmani);
+    gecerli.forEach(c => sinirlar.push(c));
+  });
+
+  // Tüm rota koordinatlarını sınırlara ekle
+  koordList.forEach(k => { if (k && k[0]) sinirlar.push([k[0], k[1]]); });
+
+  // Marker'lar — başlangıç (yeşil), bitiş (kırmızı), aktarmalar (turuncu)
+  const _ilkK = koordList.length > 0 && koordList[0] && koordList[0][0] ? { lat: koordList[0][0], lon: koordList[0][1] } : null;
+  const _sonK = koordList.length > 0 && koordList[koordList.length-1] && koordList[koordList.length-1][0] ? { lat: koordList[koordList.length-1][0], lon: koordList[koordList.length-1][1] } : null;
+  if (!_ilkK || !_sonK) { console.warn("Koordinat bulunamadı:", yol[0], "→", yol[yol.length-1]); return; }
+  const ilk = _ilkK;
+  const son = _sonK;
+
+  if (ilk) {
+    L.marker([ilk.lat, ilk.lon], {
+      icon: L.divIcon({
+        className: "",
+        html: '<div class="marker-ozel marker-bas">A</div>',
+        iconSize: [30, 30], iconAnchor: [15, 15],
+      }),
+    }).bindPopup(`<strong>Başlangıç:</strong><br>${yol[0]}${
+      rota.adimlar && rota.adimlar[0] && rota.adimlar[0].tip === "yurume"
+        ? "<br>👟 " + rota.adimlar[0].durak_e + " durağına yürü"
+        : ""
+    }`).addTo(state.rotaKatmani);
+  }
+  if (son) {
+    L.marker([son.lat, son.lon], {
+      icon: L.divIcon({
+        className: "",
+        html: '<div class="marker-ozel marker-son">B</div>',
+        iconSize: [30, 30], iconAnchor: [15, 15],
+      }),
+    }).bindPopup(`<strong>Hedef:</strong><br>${yol[yol.length - 1]}`)
+      .addTo(state.rotaKatmani);
+  }
+
+  // Aktarma marker'larını rota.koordinatlar'dan al (state.koordinatlar'daki yanlış koord'u kullanma)
+  (rota.aktarma_noktalari || []).forEach((ad) => {
+    // Yol içinde bu ismi bul, koordinatını rota.koordinatlar'dan al
+    const yolIdx = (rota.yol || []).indexOf(ad);
+    let k = null;
+    if (yolIdx >= 0 && koordList[yolIdx] && koordList[yolIdx][0]) {
+      k = { lat: koordList[yolIdx][0], lon: koordList[yolIdx][1] };
+    }
+    if (!k) return;
+    // Başlangıç veya bitiş ile aynı koordinatta ise gösterme
+    if (ilk && Math.abs(k.lat - ilk.lat) < 0.0001 && Math.abs(k.lon - ilk.lon) < 0.0001) return;
+    if (son && Math.abs(k.lat - son.lat) < 0.0001 && Math.abs(k.lon - son.lon) < 0.0001) return;
+    L.marker([k.lat, k.lon], {
+      icon: L.divIcon({
+        className: "",
+        html: '<div class="marker-ozel marker-aktarma">⟳</div>',
+        iconSize: [24, 24], iconAnchor: [12, 12],
+      }),
+    }).bindPopup(`<strong>Aktarma:</strong><br>${ad}`)
+      .addTo(state.rotaKatmani);
+  });
+
+  // Başlangıç ve bitiş marker'larını da sınırlara ekle
+  if (ilk) sinirlar.push([ilk.lat, ilk.lon]);
+  if (son) sinirlar.push([son.lat, son.lon]);
+
+  if (sinirlar.length) {
+    state.harita.fitBounds(sinirlar, { padding: [50, 50], maxZoom: 14 });
+  }
+}
+
+
+/* ═══ 7) Hata yardımcıları ═════════════════════════════════════ */
+
+function hataGoster(mesaj) {
+  $("hata-alani").innerHTML = `<div class="hata">⚠️ ${mesaj}</div>`;
+}
+function hataTemizle() {
+  $("hata-alani").innerHTML = "";
+}
+
+
+/* ═══ 8) Başlat ════════════════════════════════════════════════ */
+
+haritaBaslat();
+veriYukle();
+
+
+/* ═══ 9) Hat Profil Bileşeni ══════════════════════════════════ */  // YENİ
+
+const hpState = {  // YENİ
+  hatListesi: [],       // benzersiz otobüs hat adları  // YENİ
+  seciliHat:  "",       // YENİ
+  yon:        "ileri",  // YENİ
+  chart:      null,     // Chart.js instance  // YENİ
+  profilVeri: null,     // son API yanıtı  // YENİ
+  hatKatmani: null,     // L.layerGroup — hat profil marker/polyline  // YENİ
+};  // YENİ
+
+function hpKatmanOlustur() {  // YENİ
+  hpState.hatKatmani = L.layerGroup().addTo(state.harita);  // YENİ
+}  // YENİ
+
+async function hpHatlariYukle() {  // YENİ
+  try {  // YENİ
+    const resp = await fetch("/api/graf");  // YENİ
+    const graf = await resp.json();  // YENİ
+    const hatSet = new Set();  // YENİ
+    graf.hatlar.forEach((h) => {  // YENİ
+      if (h.hat_tipi === "otobüs") hatSet.add(h.hat_adi);  // YENİ
+    });  // YENİ
+    hpState.hatListesi = [...hatSet].sort();  // YENİ
+    const sel = $("hp-hat-sec");  // YENİ
+    hpState.hatListesi.forEach((hat) => {  // YENİ
+      const opt = document.createElement("option");  // YENİ
+      opt.value = hat;  // YENİ
+      opt.textContent = hat;  // YENİ
+      sel.appendChild(opt);  // YENİ
+    });  // YENİ
+  } catch (e) {  // YENİ
+    console.error("Hat listesi yüklenemedi:", e);  // YENİ
+  }  // YENİ
+}  // YENİ
+
+$("hp-yon-ileri").addEventListener("click", () => hpYonDegistir("ileri"));  // YENİ
+$("hp-yon-geri").addEventListener("click", () => hpYonDegistir("reverse"));  // YENİ
+
+function hpYonDegistir(yon) {  // YENİ
+  hpState.yon = yon;  // YENİ
+  $("hp-yon-ileri").classList.toggle("aktif", yon === "ileri");  // YENİ
+  $("hp-yon-geri").classList.toggle("aktif", yon === "reverse");  // YENİ
+  if (hpState.seciliHat) hpProfilYukle();  // YENİ
+}  // YENİ
+
+$("hp-hat-sec").addEventListener("change", (e) => {  // YENİ
+  hpState.seciliHat = e.target.value;  // YENİ
+  if (hpState.seciliHat) {  // YENİ
+    hpProfilYukle();  // YENİ
+  } else {  // YENİ
+    hpTemizle();  // YENİ
+  }  // YENİ
+});  // YENİ
+
+function hpTemizle() {  // YENİ
+  $("hp-istatistik").style.display = "none";  // YENİ
+  $("hp-chart-wrap").style.display = "none";  // YENİ
+  $("hp-durak-liste").style.display = "none";  // YENİ
+  if (hpState.chart) { hpState.chart.destroy(); hpState.chart = null; }  // YENİ
+  if (hpState.hatKatmani) hpState.hatKatmani.clearLayers();  // YENİ
+}  // YENİ
+
+async function hpProfilYukle() {  // YENİ
+  const hat = hpState.seciliHat;  // YENİ
+  if (!hat) return;  // YENİ
+  try {  // YENİ
+    const url = `/api/hat-profil?hat=${encodeURIComponent(hat)}&yon=${hpState.yon}`;  // YENİ
+    const resp = await fetch(url);  // YENİ
+    if (!resp.ok) return;  // YENİ
+    const veri = await resp.json();  // YENİ
+    hpState.profilVeri = veri;  // YENİ
+    hpArayuzGuncelle(veri);  // YENİ
+  } catch (e) {  // YENİ
+    console.error("Hat profil yüklenemedi:", e);  // YENİ
+  }  // YENİ
+}  // YENİ
+
+function hpArayuzGuncelle(veri) {  // YENİ
+  $("hp-durak-sayi").textContent = veri.durak_sayisi;  // YENİ
+  $("hp-toplam-km").textContent = veri.toplam_km;  // YENİ
+  $("hp-istatistik").style.display = "flex";  // YENİ
+  hpChartCiz(veri);  // YENİ
+  hpListeCiz(veri);  // YENİ
+  hpHaritaCiz(veri);  // YENİ
+}  // YENİ
+
+function hpChartCiz(veri) {  // YENİ
+  $("hp-chart-wrap").style.display = "block";  // YENİ
+  if (hpState.chart) { hpState.chart.destroy(); hpState.chart = null; }  // YENİ
+
+  const mesafeler = veri.mesafeler.slice(0, veri.duraklar.length);  // YENİ
+  const ctx = $("hp-chart").getContext("2d");  // YENİ
+
+  hpState.chart = new Chart(ctx, {  // YENİ
+    type: "line",  // YENİ
+    data: {  // YENİ
+      labels: mesafeler.map((m) => m.toFixed(2)),  // YENİ
+      datasets: [{  // YENİ
+        label: veri.hat,  // YENİ
+        data: veri.duraklar.map((_, i) => i),  // YENİ
+        borderColor: "#FF6600",  // YENİ
+        backgroundColor: "rgba(255,102,0,0.1)",  // YENİ
+        borderWidth: 2.5,  // YENİ
+        pointRadius: 3,  // YENİ
+        pointHoverRadius: 7,  // YENİ
+        pointBackgroundColor: "#FF6600",  // YENİ
+        pointHoverBackgroundColor: "#E30613",  // YENİ
+        fill: true,  // YENİ
+        tension: 0.3,  // YENİ
+      }],  // YENİ
+    },  // YENİ
+    options: {  // YENİ
+      responsive: true,  // YENİ
+      maintainAspectRatio: false,  // YENİ
+      interaction: { mode: "nearest", intersect: false },  // YENİ
+      onClick: (_evt, elems) => {  // YENİ
+        if (elems.length > 0) hpDuragaGit(elems[0].index);  // YENİ
+      },  // YENİ
+      scales: {  // YENİ
+        x: {  // YENİ
+          title: { display: true, text: "Mesafe (km)", font: { size: 11 } },  // YENİ
+          ticks: { maxTicksLimit: 10, font: { size: 10 } },  // YENİ
+        },  // YENİ
+        y: {  // YENİ
+          title: { display: true, text: "Durak sırası", font: { size: 11 } },  // YENİ
+          ticks: {  // YENİ
+            font: { size: 10 }, stepSize: 1,  // YENİ
+            callback: function(v) {  // YENİ
+              if (Number.isInteger(v) && veri.duraklar[v])  // YENİ
+                return veri.duraklar[v].stop_name.substring(0, 12);  // YENİ
+              return "";  // YENİ
+            },  // YENİ
+          },  // YENİ
+        },  // YENİ
+      },  // YENİ
+      plugins: {  // YENİ
+        legend: { display: false },  // YENİ
+        tooltip: {  // YENİ
+          callbacks: {  // YENİ
+            title: (items) => veri.duraklar[items[0].dataIndex].stop_name,  // YENİ
+            label: (item) => {  // YENİ
+              const idx = item.dataIndex;  // YENİ
+              const km = mesafeler[idx] != null ? mesafeler[idx].toFixed(2) : "?";  // YENİ
+              return `${idx + 1}. durak, kümülatif ${km} km`;  // YENİ
+            },  // YENİ
+          },  // YENİ
+        },  // YENİ
+      },  // YENİ
+    },  // YENİ
+  });  // YENİ
+}  // YENİ
+
+function hpListeCiz(veri) {  // YENİ
+  const liste = $("hp-durak-liste");  // YENİ
+  liste.style.display = "block";  // YENİ
+  const mesafeler = veri.mesafeler.slice(0, veri.duraklar.length);  // YENİ
+
+  liste.innerHTML = veri.duraklar.map((d, i) => {  // YENİ
+    const km = mesafeler[i] != null ? mesafeler[i].toFixed(2) : "?";  // YENİ
+    return `<div class="hp-durak-satir" data-idx="${i}">` +  // YENİ
+      `<div class="hp-durak-no">${i + 1}</div>` +  // YENİ
+      `<div class="hp-durak-ad">${d.stop_name}</div>` +  // YENİ
+      `<div class="hp-durak-km">${km} km</div>` +  // YENİ
+      `</div>`;  // YENİ
+  }).join("");  // YENİ
+
+  liste.querySelectorAll(".hp-durak-satir").forEach((el) => {  // YENİ
+    el.addEventListener("click", () => {  // YENİ
+      hpDuragaGit(parseInt(el.dataset.idx, 10));  // YENİ
+    });  // YENİ
+  });  // YENİ
+}  // YENİ
+
+function hpDuragaGit(idx) {  // YENİ
+  const veri = hpState.profilVeri;  // YENİ
+  if (!veri || !veri.koordinatlar[idx]) return;  // YENİ
+  const [lat, lon] = veri.koordinatlar[idx];  // YENİ
+  if (lat == null || lon == null) return;  // YENİ
+
+  const d = veri.duraklar[idx];  // YENİ
+  const mesafe = veri.mesafeler[idx] != null ? veri.mesafeler[idx].toFixed(2) : "?";  // YENİ
+
+  state.harita.flyTo([lat, lon], 15, { duration: 0.8 });  // YENİ
+
+  L.popup()  // YENİ
+    .setLatLng([lat, lon])  // YENİ
+    .setContent(  // YENİ
+      `<strong>${d.stop_name}</strong><br>` +  // YENİ
+      `${idx + 1}. durak &middot; ${mesafe} km`  // YENİ
+    )  // YENİ
+    .openOn(state.harita);  // YENİ
+
+  document.querySelectorAll(".hp-durak-satir").forEach((el) =>  // YENİ
+    el.classList.toggle("hp-aktif", parseInt(el.dataset.idx, 10) === idx)  // YENİ
+  );  // YENİ
+  const aktifEl = document.querySelector(`.hp-durak-satir[data-idx="${idx}"]`);  // YENİ
+  if (aktifEl) aktifEl.scrollIntoView({ block: "nearest", behavior: "smooth" });  // YENİ
+}  // YENİ
+
+function hpHaritaCiz(veri) {  // YENİ
+  if (!hpState.hatKatmani) return;  // YENİ
+  hpState.hatKatmani.clearLayers();  // YENİ
+
+  const coords = veri.koordinatlar  // YENİ
+    .filter(([lat, lon]) => lat != null && lon != null);  // YENİ
+  if (!coords.length) return;  // YENİ
+
+  L.polyline(coords, {  // YENİ
+    color: "#FF6600", weight: 5, opacity: 0.85,  // YENİ
+    dashArray: "8 6",  // YENİ
+  }).addTo(hpState.hatKatmani);  // YENİ
+
+  const ilk = coords[0];  // YENİ
+  const son = coords[coords.length - 1];  // YENİ
+  L.circleMarker(ilk, {  // YENİ
+    radius: 7, color: "#16A34A", fillColor: "#16A34A",  // YENİ
+    fillOpacity: 1, weight: 2,  // YENİ
+  }).bindTooltip(veri.duraklar[0].stop_name, { permanent: false })  // YENİ
+    .addTo(hpState.hatKatmani);  // YENİ
+  L.circleMarker(son, {  // YENİ
+    radius: 7, color: "#E30613", fillColor: "#E30613",  // YENİ
+    fillOpacity: 1, weight: 2,  // YENİ
+  }).bindTooltip(veri.duraklar[veri.duraklar.length - 1].stop_name, { permanent: false })  // YENİ
+    .addTo(hpState.hatKatmani);  // YENİ
+
+  state.harita.fitBounds(coords, { padding: [40, 40], maxZoom: 14 });  // YENİ
+}  // YENİ
+
+hpKatmanOlustur();  // YENİ
+hpHatlariYukle();  // YENİ
+</script>
+
+<!-- ===== GRAF MODELİ PANELİ — başlangıç ===== -->
+
+<!-- Tetikleyici buton: header içinde sağ üstte; istediğiniz yere taşıyabilirsiniz -->
+<button class="gp-trigger" id="openGraphPanel" style="position:fixed; top:16px; right:16px; z-index:1000;">
+  <span class="gp-ic">G</span>
+  <span><b>Graf Modeli</b> · Rota nasıl hesaplanır?</span>
+  <span class="gp-arr">↗</span>
+</button>
+
+<!-- ================================================================
+       PANEL MARKUP — &lt;/body&gt;'den hemen önce kopyalayın
+       ================================================================ -->
+  <div class="gp-scrim" id="gpScrim"></div>
+
+  <aside class="gp-panel" id="gpPanel" aria-hidden="true">
+    <header class="gp-head">
+      <div class="gp-badge">G</div>
+      <div>
+        <div class="gp-kicker">Sistem Açıklayıcısı</div>
+        <h2>Graf Modeli — Rota nasıl hesaplanır?</h2>
+      </div>
+      <button class="gp-close" id="gpClose" aria-label="Kapat">×</button>
+    </header>
+
+    <nav class="gp-tabs">
+      <button class="gp-active" data-tab="model">Model</button>
+      <button data-tab="cost">Maliyet</button>
+      <button data-tab="steps">Adımlar</button>
+    </nav>
+
+    <!-- ─── MODEL ─── -->
+    <div class="gp-body" data-panel="model">
+      <section>
+        <p class="gp-intro">
+          Şehir içi ulaşım ağı bir <em>yönsüz çoklu graf</em> olarak modellenir.
+          Her durak bir <em>düğüm</em>, her iki durağı birbirine bağlayan
+          hat segmenti ise <em>kenar</em>dır. Rota arama, başlangıçtan hedefe
+          en düşük <em>etkin maliyetli</em> yolu seçer.
+        </p>
+      </section>
+
+      <section>
+        <h3 class="gp-hsec">Temel Kavramlar</h3>
+
+        <div class="gp-concept">
+          <div class="gp-glyph">
+            <svg width="22" height="22" viewBox="0 0 22 22">
+              <circle cx="11" cy="11" r="5" fill="#14171A"/>
+              <circle cx="11" cy="11" r="9" fill="none" stroke="#14171A" stroke-width="1" stroke-dasharray="2 2" opacity="0.4"/>
+            </svg>
+          </div>
+          <div>
+            <div class="gp-name"><b>Düğüm — Durak</b><code>node</code></div>
+            <div class="gp-desc">
+              Ağdaki tek bir konum: metro, tramvay, vapur, füniküler veya otobüs durağı.
+              Her düğümün benzersiz bir <span class="mono">stop_id</span>, bir ismi ve
+              <span class="mono">(lat, lon)</span> koordinatı vardır.
+            </div>
+            <div class="gp-ex">graf.istasyonlar["18996"] → "Kadıköy"</div>
+          </div>
+        </div>
+
+        <div class="gp-concept">
+          <div class="gp-glyph">
+            <svg width="32" height="22" viewBox="0 0 32 22">
+              <circle cx="5" cy="11" r="3.5" fill="#14171A"/>
+              <circle cx="27" cy="11" r="3.5" fill="#14171A"/>
+              <line x1="8.5" y1="11" x2="23.5" y2="11" stroke="#1A4F8A" stroke-width="2.5"/>
+            </svg>
+          </div>
+          <div>
+            <div class="gp-name"><b>Kenar — Ulaşım Bağlantısı</b><code>edge</code></div>
+            <div class="gp-desc">
+              İki ardışık durağı bir hat üzerinde birleştirir. Her kenar hangi hatta
+              ait olduğunu taşır (M4, T1, Marmaray, 500T, Yürüme…) — bu sayede sistem
+              aynı hatta devam etmek ile aktarmayı ayırt edebilir.
+            </div>
+            <div class="gp-ex">(18996, 18955, "M4", sure=4)</div>
+          </div>
+        </div>
+
+        <div class="gp-concept">
+          <div class="gp-glyph">
+            <svg width="32" height="22" viewBox="0 0 32 22">
+              <line x1="3" y1="14" x2="29" y2="14" stroke="#1A4F8A" stroke-width="2.5"/>
+              <rect x="11" y="3" width="10" height="9" rx="2" fill="#fff" stroke="#14171A" stroke-width="1"/>
+              <text x="16" y="10" text-anchor="middle" font-size="7" font-family="JetBrains Mono" font-weight="600" fill="#14171A">w</text>
+            </svg>
+          </div>
+          <div>
+            <div class="gp-name"><b>Ağırlık — Süre + Aktarma</b><code>weight</code></div>
+            <div class="gp-desc">
+              Bir kenarın maliyeti iki bileşenden oluşur: ham seyahat süresi (dakika)
+              ve hat değişiminde uygulanan aktarma cezası. Aktarma cezası, yolcunun
+              gerçek deneyimini — bekleme ve yürüme — saf süreden daha doğru biçimde yansıtır.
+            </div>
+            <div class="gp-ex">w(u,v) = sure(u,v) + ceza(aktarma)</div>
+          </div>
+        </div>
+
+        <div class="gp-concept">
+          <div class="gp-glyph">
+            <svg width="32" height="22" viewBox="0 0 32 22">
+              <path d="M 3 17 L 10 17 L 14 8 L 22 8 L 29 17" fill="none" stroke="#C8772A" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+              <circle cx="3" cy="17" r="2.5" fill="#14171A"/>
+              <circle cx="29" cy="17" r="2.5" fill="#C8772A"/>
+            </svg>
+          </div>
+          <div>
+            <div class="gp-name"><b>Rota Seçimi — En Düşük Maliyet</b><code>shortest path</code></div>
+            <div class="gp-desc">
+              Raylı sistemde BFS varyantları, İETT ağında Dijkstra kullanılır.
+              Her ikisi de tüm olası yollar arasından toplam ağırlığı minimize eden
+              tek bir yolu döndürür. Sonuç, seçilen stratejiye göre süre, aktarma
+              veya yürüme cinsinden optimaldir.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3 class="gp-hsec">Canlı Örnek · 5 düğümlü alt graf</h3>
+        <div class="gp-viz">
+          <svg id="gpViz" viewBox="0 0 480 220"></svg>
+          <div class="gp-cap">
+            <span id="gpVizCap">Kenarlar üstünde ağırlıklar (dakika · +t aktarma)</span>
+            <span class="gp-lab" id="gpVizLab">5 düğüm · 6 kenar</span>
+          </div>
+          <div class="gp-vctl" id="gpVizCtl">
+            <button data-mode="raw">Yapı</button>
+            <button class="gp-active" data-mode="weights">Ağırlıklar</button>
+            <button data-mode="shortest">En Kısa Yol</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ─── MALIYET ─── -->
+    <div class="gp-body gp-hidden" data-panel="cost">
+      <section>
+        <p class="gp-intro">
+          Aynı graf üzerinde üç farklı strateji çalıştırılır. Her stratejinin
+          kendi <em>skor</em> fonksiyonu vardır; algoritma bu skoru minimize
+          edecek yolu seçer.
+        </p>
+      </section>
+
+      <section>
+        <h3 class="gp-hsec">Skor Fonksiyonları</h3>
+
+        <div class="gp-formula">
+          <div class="gp-flab">Strateji<b>En Hızlı</b></div>
+          <div class="gp-eq">
+            skor = <span class="gp-key">sure</span> + <span class="gp-key">ceza</span>(aktarma)<br>
+            ceza: <span class="gp-num">0</span>→0 · <span class="gp-num">1</span>→+15 · <span class="gp-num">2</span>→+40 · <span class="gp-num">3+</span>→+1000
+          </div>
+        </div>
+
+        <div class="gp-formula">
+          <div class="gp-flab">Strateji<b>Az Aktarma</b></div>
+          <div class="gp-eq">
+            skor = <span class="gp-key">aktarma</span> × <span class="gp-num">1000</span> + <span class="gp-key">sure</span>
+          </div>
+        </div>
+
+        <div class="gp-formula">
+          <div class="gp-flab">Strateji<b>Az Yürüme</b></div>
+          <div class="gp-eq">
+            skor = <span class="gp-key">yurume_süresi</span> ağırlıklı<br>
+            <span style="color:var(--gp-muted)">(yalnızca İETT alt grafında)</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3 class="gp-hsec">Neden Aktarma Cezası?</h3>
+        <p class="gp-paragraph">
+          Saf süre minimizasyonu, yolcuyu çok kısa süreli ama bol aktarmalı rotalara
+          yönlendirir. Gerçek dünyada her aktarma bekleme, yürüme ve risk üretir.
+          Ağırlığa eklenen sabit ceza, algoritmayı yolcunun deneyimine daha yakın
+          bir optimuma çeker.
+        </p>
+      </section>
+    </div>
+
+    <!-- ─── ADIMLAR ─── -->
+    <div class="gp-body gp-hidden" data-panel="steps">
+      <section>
+        <p class="gp-intro">
+          Algoritma bir yol bulduğunda, onu yolcuya doğal dilde anlatabilmek için
+          kenarları beş <em>adım tipine</em> ayırır.
+        </p>
+      </section>
+
+      <section>
+        <h3 class="gp-hsec">Adım Tipleri</h3>
+        <div class="gp-steps">
+          <div class="gp-step"><span class="gp-tag gp-bin">bin</span><span class="gp-mean">İlk biniş — <code>durak</code>'tan <code>hat</code>'a binilir.</span></div>
+          <div class="gp-step"><span class="gp-tag gp-devam">devam</span><span class="gp-mean">Aynı hatta <code>durak_sayisi</code> durak boyunca devam.</span></div>
+          <div class="gp-step"><span class="gp-tag gp-aktarma">aktarma</span><span class="gp-mean"><code>hat_den</code> hattından <code>hat_e</code> hattına geçiş.</span></div>
+          <div class="gp-step"><span class="gp-tag gp-yurume">yürüme</span><span class="gp-mean">İki durak arası yürüme — <code>durak_den → durak_e</code>.</span></div>
+          <div class="gp-step"><span class="gp-tag gp-in">in</span><span class="gp-mean">Son durakta iniş.</span></div>
+        </div>
+      </section>
+
+      <section>
+        <h3 class="gp-hsec">Örnek Yol · Kadıköy → Taksim</h3>
+        <div class="gp-steps">
+          <div class="gp-step"><span class="gp-tag gp-bin">bin</span><span class="gp-mean">Kadıköy · M4'e bin</span></div>
+          <div class="gp-step"><span class="gp-tag gp-devam">devam</span><span class="gp-mean">M4 · 3 durak</span></div>
+          <div class="gp-step"><span class="gp-tag gp-aktarma">aktarma</span><span class="gp-mean">Ayrılık Çeşmesi · M4 → Marmaray</span></div>
+          <div class="gp-step"><span class="gp-tag gp-devam">devam</span><span class="gp-mean">Marmaray · 4 durak</span></div>
+          <div class="gp-step"><span class="gp-tag gp-aktarma">aktarma</span><span class="gp-mean">Sirkeci · Marmaray → M2</span></div>
+          <div class="gp-step"><span class="gp-tag gp-devam">devam</span><span class="gp-mean">M2 · 2 durak</span></div>
+          <div class="gp-step"><span class="gp-tag gp-in">in</span><span class="gp-mean">Taksim · in</span></div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="gp-foot">
+      <span>Esc · paneli kapat</span>
+      <span class="gp-v">graf · v2.1 · 2 alt-ağ · ~15K düğüm</span>
+    </footer>
+  </aside>
+
+<!-- ===== GRAF MODELİ PANELİ — bitiş ===== -->
+
+<script>
+/* ===== GRAF MODELİ PANELİ JS — eklendi ===== */
+function initGraphPanel(){
+      const panel  = document.getElementById('gpPanel');
+      const scrim  = document.getElementById('gpScrim');
+      const open   = document.getElementById('openGraphPanel');
+      const close  = document.getElementById('gpClose');
+      const tabs   = document.querySelectorAll('.gp-tabs button');
+      const bodies = document.querySelectorAll('.gp-body');
+
+      function openPanel(){
+        panel.classList.add('gp-open');
+        scrim.classList.add('gp-open');
+        panel.setAttribute('aria-hidden','false');
+      }
+      function closePanel(){
+        panel.classList.remove('gp-open');
+        scrim.classList.remove('gp-open');
+        panel.setAttribute('aria-hidden','true');
+      }
+
+      open  && open .addEventListener('click', openPanel);
+      close && close.addEventListener('click', closePanel);
+      scrim && scrim.addEventListener('click', closePanel);
+      window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closePanel(); });
+
+      tabs.forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          tabs.forEach(b=>b.classList.remove('gp-active'));
+          btn.classList.add('gp-active');
+          const t = btn.dataset.tab;
+          bodies.forEach(b=>{
+            b.classList.toggle('gp-hidden', b.dataset.panel !== t);
+          });
+        });
+      });
+
+      // mini graph viz
+      const viz   = document.getElementById('gpViz');
+      const cap   = document.getElementById('gpVizCap');
+      const lab   = document.getElementById('gpVizLab');
+      const vctl  = document.getElementById('gpVizCtl');
+      if(!viz) return;
+
+      const N = {
+        K:{x:60,  y:130, l:"Kadıköy",  c:"#14171A"},
+        A:{x:160, y:80,  l:"Ayrılık",  c:"#fff"},
+        S:{x:240, y:160, l:"Söğütlü.", c:"#fff"},
+        Y:{x:340, y:90,  l:"Yenikapı", c:"#fff"},
+        T:{x:420, y:150, l:"Taksim",   c:"#C8772A"},
+      };
+      const E = [
+        ["K","A",4,0,"#1A4F8A","0"],
+        ["A","S",3,0,"#1A4F8A","0"],
+        ["S","Y",8,1,"#7A8084","0"],
+        ["Y","T",11,1,"#5BB033","0"],
+        ["A","Y",16,0,"#6E5BAA","0"],
+        ["K","S",18,0,"#8A8478","4 4"],
+      ];
+      const shortest = ["K","A","S","Y","T"];
+      const inShortest = (a,b) => {
+        for(let i=0;i<shortest.length-1;i++){
+          if(shortest[i]===a && shortest[i+1]===b) return true;
+        }
+        return false;
+      };
+
+      function render(mode){
+        let svg = '';
+        // edges
+        E.forEach(([a,b,sure,akt,col,dash])=>{
+          const isP = mode==='shortest' && inShortest(a,b);
+          const sw  = isP ? 5 : (mode==='shortest' ? 2 : 3);
+          const op  = (mode==='shortest' && !isP) ? 0.25 : 1;
+          svg += `<line x1="${N[a].x}" y1="${N[a].y}" x2="${N[b].x}" y2="${N[b].y}"
+                  stroke="${col}" stroke-width="${sw}" stroke-opacity="${op}"
+                  stroke-dasharray="${dash}" stroke-linecap="round"/>`;
+          if(mode!=='raw'){
+            const mx = (N[a].x+N[b].x)/2;
+            const my = (N[a].y+N[b].y)/2 - 6;
+            svg += `<g>
+              <rect x="${mx-18}" y="${my-8}" width="36" height="16" rx="4"
+                fill="#fff" stroke="${isP?'#14171A':'#E6E2D8'}" stroke-width="1"/>
+              <text x="${mx}" y="${my+4}" text-anchor="middle"
+                font-family="JetBrains Mono" font-size="9.5" font-weight="600"
+                fill="${isP?'#14171A':'#3A3F45'}">${sure}${akt?'+t':''}</text>
+            </g>`;
+          }
+        });
+        // nodes
+        Object.entries(N).forEach(([k,n])=>{
+          const inP = mode==='shortest' && shortest.includes(k);
+          const fill = n.c==='#fff' ? '#fff' : n.c;
+          const stroke = n.c==='#fff' ? '#14171A' : '#fff';
+          svg += `<circle cx="${n.x}" cy="${n.y}" r="8.5"
+            fill="${fill}" stroke="${stroke}" stroke-width="${inP?2.5:1.8}"/>
+            <text x="${n.x}" y="${n.y+24}" text-anchor="middle"
+              font-family="Instrument Sans" font-size="11" fill="#14171A" font-weight="500"
+              paint-order="stroke" stroke="#fff" stroke-width="3">${n.l}</text>`;
+        });
+        viz.innerHTML = svg;
+
+        if(mode==='raw')      cap.textContent = "Ham graf — sadece düğümler ve kenarlar";
+        if(mode==='weights')  cap.textContent = "Kenarlar üstünde ağırlıklar (dakika · +t aktarma)";
+        if(mode==='shortest') cap.textContent = "Algoritmanın seçtiği en düşük maliyetli yol";
+        lab.textContent = mode==='shortest' ? "w = 4+3+8+11 = 26" : "5 düğüm · 6 kenar";
+      }
+      render('weights');
+
+      vctl.querySelectorAll('button').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          vctl.querySelectorAll('button').forEach(x=>x.classList.remove('gp-active'));
+          b.classList.add('gp-active');
+          render(b.dataset.mode);
+        });
+      });
+    }
+
+    // ↓ Mevcut DOMContentLoaded / init kodunuzda çağırın
+    document.addEventListener('DOMContentLoaded', initGraphPanel);
+</script>
+</body>
+</html>
